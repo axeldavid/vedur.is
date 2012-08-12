@@ -1,0 +1,11 @@
+# File extensions
+*.pyc
+*.swp
+
+# External libraries and source folders
+bin/*
+include/*
+lib/*
+lib64/*
+local/*
+
