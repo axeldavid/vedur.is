@@ -9,27 +9,14 @@ class Weather(object):
         "op_w" : "xml",
         "type" : "obs",
         "lang" : "is",
-        "view" : "xml",
-        "ids" : "1"
+        "view" : "xml"
     }
-    force_fetch = False
-    resolution = 15 #min
 
-    url = ""
-    file_path = ""
-    xml = None
-    location = ""
-    date = None
-    temperature = ""
-    wind = ""
-    winddirection = ""
-    weather = ""
-    precipitation = ""
-
-    def __init__(self):
+    def __init__(self, ids="1", resolution=15, force_fetch=False):
+        self.params["ids"] = str(ids)
+        self.resolution = resolution
         self.url = r"http://xmlweather.vedur.is/?" + urllib.urlencode(self.params)
-        self.file_path = self._get_file_path()
-        self.xml = self.get_xmlobj()
+        self.xml = self.get_xmlobj(self._get_file_path(), force_fetch=force_fetch)
         self.location = self.get_node("name")
         self.temperature = self.get_node("T")
         self.wind = self.get_node("F")
@@ -37,11 +24,10 @@ class Weather(object):
         self.weather = self.get_node("W")
         self.precipitation = self.get_node("R")
 
-    def get_node(self, title):
-        result = self.xml.xpath("//observations/station/" + title)
-        if result:
-            return result[0].text
-        return ""
+    def get_node(self, title, except_val="", xml=None):
+        xml = self.xml if xml is None else xml
+        result = xml.xpath("//observations/station/%s" % title)
+        return result and result[0].text or except_val
 
     def _get_file_path(self):
         file_path = os.path.join( os.getenv("HOME"), ".temp", "weather.xml" )
@@ -54,31 +40,33 @@ class Weather(object):
         try:
             return urllib.urlopen(self.url).read()
         except:
+            # TODO: Improve exception, raise error
             return ""
 
-    def _save_xml(self, xml_str=""):
+    def _save_xml(self, file_path, xml_str=""):
         if not xml_str:
             xml_str = self._fetch_xml()
-        f = open(self.file_path, "w")
+        f = open(file_path, "w")
         f.write(xml_str)
         f.close()
 
-    def _read_xml(self):
-        if not os.path.exists(self.file_path):
-            self._save_xml()
-        f = open(self.file_path, "r")
+    def _read_xml(self, file_path):
+        if not os.path.exists(file_path):
+            self._save_xml(file_path)
+        f = open(file_path, "r")
         xml_str = f.read()
         f.close()
         return xml_str
 
-    def get_xmlobj(self):
-        xml = etree.fromstring(self._read_xml())
-        date = datetime.datetime.strptime( xml.xpath("//observations/station/time")[0].text, "%Y-%m-%d %H:%M:%S" )
-        if datetime.datetime.now() - date > datetime.timedelta(minutes=self.resolution) or self.force_fetch:
+    def get_xmlobj(self, file_path, force_fetch=False):
+        xml_str = self._read_xml(file_path)
+        xml = etree.fromstring(xml_str)
+        date = datetime.datetime.strptime( self.get_node("time", xml=xml), "%Y-%m-%d %H:%M:%S" )
+        if force_fetch or datetime.datetime.now() - date > datetime.timedelta(minutes=self.resolution):
             xml_str = self._fetch_xml()
-            self._save_xml(xml_str=xml_str)
+            self._save_xml(file_path, xml_str=xml_str)
             xml = etree.fromstring(xml_str)
-            date = datetime.datetime.strptime( xml.xpath("//observations/station/time")[0].text, "%Y-%m-%d %H:%M:%S" )
+            date = datetime.datetime.strptime(self.get_node("time", xml=xml), "%Y-%m-%d %H:%M:%S")
         self.date = date
         return xml
 
