@@ -4,6 +4,17 @@ import os, sys, urllib, datetime
 from lxml import etree
 
 class Weather(object):
+    
+    """
+        This is a simple python interface to get weather information form vedur.is
+        
+        PARAMETERS:
+        ids             The default weather station is in Reykjavik and can be set with
+                        this parameter. More stations can be found at
+                        http://www.vedur.is/vedur/stodvar
+
+        resolution:     Caching time (minutes). Default is 15 minutes.
+    """
 
     params = {
         "op_w" : "xml",
@@ -14,15 +25,16 @@ class Weather(object):
 
     def __init__(self, ids="1", resolution=15, force_fetch=False, cache=True):
         self.params["ids"] = str(ids)
-        self.resolution = resolution
+        self.resolution = int(resolution)
         self.url = r"http://xmlweather.vedur.is/?" + urllib.urlencode(self.params)
         self.xml = self.get_xmlobj(force_fetch=force_fetch, cache=cache)
-        self.location = self.get_node("name")
-        self.temperature = self.get_node("T")
-        self.wind = self.get_node("F")
-        self.winddirection = self.get_node("D")
-        self.weather = self.get_node("W")
-        self.precipitation = self.get_node("R")
+        if self.xml is not None:
+            self.location = self.get_node("name")
+            self.temperature = self.get_node("T")
+            self.wind = self.get_node("F")
+            self.winddirection = self.get_node("D")
+            self.weather = self.get_node("W")
+            self.precipitation = self.get_node("R")
 
     def get_node(self, title, except_val="", xml=None):
         xml = self.xml if xml is None else xml
@@ -30,7 +42,7 @@ class Weather(object):
         return result and result[0].text or except_val
 
     def _get_file_path(self):
-        file_path = os.path.join( os.getenv("HOME"), ".temp", "weather.xml" )
+        file_path = os.path.join( os.getenv("HOME"), ".vedur", "vedur.xml" )
         dirname = os.path.dirname(file_path)
         if not os.path.exists(dirname):
             os.makedirs(dirname)
@@ -54,24 +66,10 @@ class Weather(object):
         f.close()
         return xml_str
 
-    def _is_outdated(self, xml):
-        """
-            Compares the datetime in the xml document to the current datetime with respect
-            to the given time resolution (minutes)
-        """
-        datetime = datetime.datetime.strptime( self.get_node("time", xml=xml), "%Y-%m-%d %H:%M:%S" )
-        return datetime.datetime.now() - datetime > datetime.timedelta(minutes=self.resolution)
-
-    def _create_xmlobj(self, xml_str, resolution, force_fetch=False):
-        xml = etree.fromstring(xml_str)
-        if force_fetch or self._is_outdated(xml, resolution=resolution):
-            xml_str = self.fetch_xml()
-            return self._create_xmlobj(xml_str, resolution)
-        return xml, xml_str
-
     def _update_weather(self, xml_str):
         xml = etree.fromstring(xml_str)
-        if self._is_outdated(xml):
+        date = datetime.datetime.strptime( self.get_node("time", xml=xml), "%Y-%m-%d %H:%M:%S" )
+        if datetime.datetime.now() - date > datetime.timedelta(minutes=self.resolution):
             xml_str = self.fetch_xml()
             xml = etree.fromstring(xml_str)
         return xml_str, xml
