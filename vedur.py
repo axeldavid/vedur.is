@@ -12,11 +12,11 @@ class Weather(object):
         "view" : "xml"
     }
 
-    def __init__(self, ids="1", resolution=15, force_fetch=False):
+    def __init__(self, ids="1", resolution=15, force_fetch=False, cache=True):
         self.params["ids"] = str(ids)
         self.resolution = resolution
         self.url = r"http://xmlweather.vedur.is/?" + urllib.urlencode(self.params)
-        self.xml = self.get_xmlobj(self._get_file_path(), force_fetch=force_fetch)
+        self.xml = self.get_xmlobj(force_fetch=force_fetch, cache=cache)
         self.location = self.get_node("name")
         self.temperature = self.get_node("T")
         self.wind = self.get_node("F")
@@ -36,44 +36,66 @@ class Weather(object):
             os.makedirs(dirname)
         return file_path
 
-    def _fetch_xml(self):
+    def fetch_xml(self):
         try:
             return urllib.urlopen(self.url).read()
         except:
             # TODO: Improve exception, raise error
             return ""
 
-    def _save_xml(self, file_path, xml_str=""):
-        if not xml_str:
-            xml_str = self._fetch_xml()
+    def save_xml(self, file_path, xml_str):
         f = open(file_path, "w")
         f.write(xml_str)
         f.close()
 
-    def _read_xml(self, file_path):
-        if not os.path.exists(file_path):
-            self._save_xml(file_path)
+    def read_xml(self, file_path):
         f = open(file_path, "r")
         xml_str = f.read()
         f.close()
         return xml_str
 
-    def get_xmlobj(self, file_path, force_fetch=False):
-        xml_str = self._read_xml(file_path)
+    def _is_outdated(self, xml):
+        """
+            Compares the datetime in the xml document to the current datetime with respect
+            to the given time resolution (minutes)
+        """
+        datetime = datetime.datetime.strptime( self.get_node("time", xml=xml), "%Y-%m-%d %H:%M:%S" )
+        return datetime.datetime.now() - datetime > datetime.timedelta(minutes=self.resolution)
+
+    def _create_xmlobj(self, xml_str, resolution, force_fetch=False):
         xml = etree.fromstring(xml_str)
-        date = datetime.datetime.strptime( self.get_node("time", xml=xml), "%Y-%m-%d %H:%M:%S" )
-        if force_fetch or datetime.datetime.now() - date > datetime.timedelta(minutes=self.resolution):
-            xml_str = self._fetch_xml()
-            self._save_xml(file_path, xml_str=xml_str)
+        if force_fetch or self._is_outdated(xml, resolution=resolution):
+            xml_str = self.fetch_xml()
+            return self._create_xmlobj(xml_str, resolution)
+        return xml, xml_str
+
+    def _update_weather(self, xml_str):
+        xml = etree.fromstring(xml_str)
+        if self._is_outdated(xml):
+            xml_str = self.fetch_xml()
             xml = etree.fromstring(xml_str)
-            date = datetime.datetime.strptime(self.get_node("time", xml=xml), "%Y-%m-%d %H:%M:%S")
-        self.date = date
+        return xml_str, xml
+
+    def get_xmlobj(self, force_fetch=False, cache=True):
+        xml = None
+        if cache or not force_fetch:
+            file_path = self._get_file_path()
+        if not force_fetch and os.path.exists(file_path):
+            xml_str = self.read_xml(file_path)
+            if xml_str:
+                xml_str, xml = self._update_weather(self.read_xml(file_path))
+        else:
+            xml_str = self.fetch_xml()
+            if xml_str:
+                xml = etree.fromstring(xml_str)
+
+        if xml_str and cache:
+            self.save_xml(file_path, xml_str)
         return xml
 
 def __main__():
     weather = Weather()
     args = sys.argv[1:]
-
 
 
 if __name__ == "__main__":
