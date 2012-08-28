@@ -1,19 +1,26 @@
 #!usr/bin/env python
 
-import os, sys, urllib, datetime
+import datetime
+import os
+import urllib
 from lxml import etree
 
 class Weather(object):
     
     """
-        This is a simple python interface to get weather information form vedur.is
+        This is a simple python interface to get weather information form
+        vedur.is
         
         PARAMETERS:
-        ids             The default weather station is in Reykjavik and can be set with
-                        this parameter. More stations can be found at
+        ids             The default weather station is in Reykjavik and can be
+                        set with this parameter. More stations can be found at
                         http://www.vedur.is/vedur/stodvar
 
         resolution:     Caching time (minutes). Default is 15 minutes.
+
+        force_fetch:    Nothing will be read from cache if this is set to True
+
+        cache:          No data will be saved if this is set to False.
     """
 
     params = {
@@ -23,10 +30,20 @@ class Weather(object):
         "view" : "xml"
     }
 
+    location = ""
+    temperature = ""
+    wind = ""
+    winddirection = ""
+    weather = ""
+    precipitaion = ""
+    max_wind = ""
+    max_blast = ""
+
     def __init__(self, ids="1", resolution=15, force_fetch=False, cache=True):
         self.params["ids"] = str(ids)
         self.resolution = int(resolution)
-        self.url = r"http://xmlweather.vedur.is/?" + urllib.urlencode(self.params)
+        self.url = r"http://xmlweather.vedur.is/?%s" %\
+                urllib.urlencode(self.params)
         self.xml = self.get_xmlobj(force_fetch=force_fetch, cache=cache)
         if self.xml is not None:
             self.location = self.get_node("name")
@@ -35,6 +52,8 @@ class Weather(object):
             self.winddirection = self.get_node("D")
             self.weather = self.get_node("W")
             self.precipitation = self.get_node("R")
+            self.max_wind = self.get_node("FX")
+            self.max_blast = self.get_node("FG")
 
     def get_node(self, title, except_val="", xml=None):
         xml = self.xml if xml is None else xml
@@ -66,12 +85,18 @@ class Weather(object):
         f.close()
         return xml_str
 
+    def _get_date(self, xml):
+        date_str = self.get_node("time", xml=xml)
+        return datetime.datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+
     def _update_weather(self, xml_str):
         xml = etree.fromstring(xml_str)
-        date = datetime.datetime.strptime( self.get_node("time", xml=xml), "%Y-%m-%d %H:%M:%S" )
-        if datetime.datetime.now() - date > datetime.timedelta(minutes=self.resolution):
+        self.date = self._get_date(xml)
+        if datetime.datetime.now() - self.date >\
+           datetime.timedelta(minutes=self.resolution):
             xml_str = self.fetch_xml()
             xml = etree.fromstring(xml_str)
+            self.date = self._get_date(xml)
         return xml_str, xml
 
     def get_xmlobj(self, force_fetch=False, cache=True):
@@ -92,9 +117,9 @@ class Weather(object):
         return xml
 
 def __main__():
-    weather = Weather()
-    args = sys.argv[1:]
-
+    w = Weather()
+    weather = u"The temperature in %s is %s celsius degrees"
+    print weather % (w.location, w.temperature)
 
 if __name__ == "__main__":
     __main__()
