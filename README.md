@@ -14,7 +14,8 @@ python libraries from requirements.txt:
 * libxslt1-dev
 
 Then just run:
-> pip install -r requirements.txt
+
+	´pip install -r requirements.txt´
 
 assuming you use pip. Otherwise just make sure the python libraries listed in requirements.txt
 are installed.
