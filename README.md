@@ -1,7 +1,8 @@
 Vedur.is
 =========
 
-This is a simple python interface to get weather information from [Veðurstofan](http://vedur.is).
+This is a simple python interface to get weather information from the Icelandic met office [Veðurstofa Íslands](http://vedur.is).
+
 
 Dependencies
 -------------
